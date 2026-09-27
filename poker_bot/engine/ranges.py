@@ -11,6 +11,7 @@ entre 0 y 1 cada uno. Se construye desde la notación habitual de póker:
     "AK"                    AKs + AKo
     "AsKs"                  combo concreto
     "KQs:0.5"               peso parcial (se juega la mitad de las veces)
+    "top:20"                el 20 % superior de manos (según HAND_RANKING)
 
 o con ``Range.top_percent(20)`` para el X% superior de manos.
 """
@@ -119,6 +120,10 @@ class Range:
             raw = raw.strip()
             if not raw:
                 continue
+            if raw.lower().startswith("top:"):
+                for combo, w in cls.top_percent(float(raw[4:])):
+                    rng.add(combo, w)
+                continue
             weight = 1.0
             if ":" in raw:
                 raw, w = raw.split(":", 1)
@@ -176,6 +181,25 @@ class Range:
         dead_set = set(dead)
         return Range({c: w for c, w in self.weights.items()
                       if w > 0 and c[0] not in dead_set and c[1] not in dead_set})
+
+    def weight(self, combo: Combo) -> float:
+        return self.weights.get(self._key(combo), 0.0)
+
+    def scaled(self, factor: float) -> "Range":
+        """Copia con todos los pesos multiplicados por ``factor`` (máx. 1)."""
+        return Range({c: min(1.0, w * factor) for c, w in self.weights.items() if w * factor > 0})
+
+    def union(self, other: "Range") -> "Range":
+        """Unión quedándose con el peso máximo de cada combo."""
+        out = Range(dict(self.weights))
+        for c, w in other:
+            out.add(c, w)
+        return out
+
+    def minus(self, other: "Range") -> "Range":
+        """Resta de pesos: lo que queda de este rango quitando la parte de ``other``."""
+        out = {c: w - other.weights.get(c, 0.0) for c, w in self.weights.items()}
+        return Range({c: w for c, w in out.items() if w > 1e-9})
 
     def __len__(self) -> int:
         return len(self.weights)

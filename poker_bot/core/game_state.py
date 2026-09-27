@@ -50,7 +50,7 @@ class Action:
 
 # Nombres de posición por tamaño de mesa, empezando por el botón y siguiendo
 # el sentido de las agujas del reloj (BTN, SB, BB, UTG, ...).
-_POSITIONS_BY_SIZE: dict[int, list[str]] = {
+POSITIONS_BY_SIZE: dict[int, list[str]] = {
     2: ["BTN", "BB"],   # heads-up: el botón es también la ciega pequeña
     3: ["BTN", "SB", "BB"],
     4: ["BTN", "SB", "BB", "CO"],
@@ -145,11 +145,11 @@ class GameState:
     # ------------------------------------------------------------------ #
     # Posiciones
     # ------------------------------------------------------------------ #
-    def assign_positions(self) -> None:
-        """Asigna el nombre de posición a cada jugador sentado según el botón.
+    def _seated_from_button(self) -> list[PlayerState]:
+        """Jugadores sentados en la mano, empezando por el botón (BTN, SB, BB, UTG...).
 
-        Solo se cuentan asientos ocupados (stack > 0 o con apuesta) al inicio de
-        la mano; los que ya han foldeado conservan su posición.
+        Solo se cuentan asientos ocupados (stack > 0, con apuesta o en la mano);
+        los que ya han foldeado siguen contando porque conservan su posición.
         """
         seated = sorted(
             (p for p in self.players if p.stack > 0 or p.bet > 0 or p.in_hand),
@@ -157,11 +157,50 @@ class GameState:
         )
         n = len(seated)
         if n < 2:
-            return
-        names = _POSITIONS_BY_SIZE.get(n) or _POSITIONS_BY_SIZE[10][:n]
-        seats = [p.seat for p in seated]
+            return seated
         # Si el asiento del botón estuviera vacío, el botón efectivo es el
         # primer asiento ocupado anterior a él.
+        seats = [p.seat for p in seated]
         btn_idx = max((i for i, s in enumerate(seats) if s <= self.dealer_seat), default=n - 1)
-        for offset in range(n):
-            seated[(btn_idx + offset) % n].position = names[offset]
+        return seated[btn_idx:] + seated[:btn_idx]
+
+    def assign_positions(self) -> None:
+        """Asigna el nombre de posición a cada jugador sentado según el botón."""
+        seated = self._seated_from_button()
+        n = len(seated)
+        if n < 2:
+            return
+        names = POSITIONS_BY_SIZE.get(n) or POSITIONS_BY_SIZE[10][:n]
+        for p, name in zip(seated, names):
+            p.position = name
+
+    def preflop_order(self) -> list[int]:
+        """Asientos en orden de acción preflop (UTG ... BTN, SB, BB; en heads-up BTN, BB)."""
+        seated = [p.seat for p in self._seated_from_button()]
+        if len(seated) <= 2:
+            return seated
+        return seated[3:] + seated[:3]
+
+    def postflop_order(self) -> list[int]:
+        """Asientos en orden de acción postflop (SB primero, BTN último; en heads-up BB, BTN)."""
+        seated = [p.seat for p in self._seated_from_button()]
+        if len(seated) <= 2:
+            return seated[::-1]
+        return seated[1:] + seated[:1]
+
+    def players_behind_preflop(self, seat: int) -> int:
+        """Cuántos jugadores actúan después de ``seat`` preflop si todos se quedan."""
+        order = self.preflop_order()
+        return len(order) - 1 - order.index(seat)
+
+    def hero_in_position(self) -> bool:
+        """True si el héroe actúa después de todos los rivales vivos en las calles postflop."""
+        order = self.postflop_order()
+        alive = [p.seat for p in self.opponents_in_hand]
+        return all(order.index(self.hero.seat) > order.index(s) for s in alive if s in order)
+
+    def player(self, seat: int) -> PlayerState:
+        for p in self.players:
+            if p.seat == seat:
+                return p
+        raise KeyError(seat)
