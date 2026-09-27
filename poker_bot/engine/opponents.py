@@ -134,28 +134,3 @@ def unknown(name: str = "?") -> OpponentStats:
     """Perfil por defecto (sin datos): usa solo los valores a priori."""
     return OpponentStats(name=name)
 
-
-# --------------------------------------------------------------------------- #
-# Estilos predefinidos: para etiquetar a un amigo a mano sin tener estadísticas.
-# Equivalen a ~150 manos observadas con ese perfil.
-# --------------------------------------------------------------------------- #
-STYLE_PRESETS: dict[str, dict[str, int]] = {
-    "normal": {},
-    "calling station": dict(hands=150, vpip=80, pfr=12, postflop_aggr=15, postflop_calls=90,
-                            cbet_faced=50, fold_to_cbet=8, saw_flop=110, went_to_showdown=65),
-    "se tira mucho": dict(hands=150, vpip=35, pfr=20, postflop_aggr=25, postflop_calls=20,
-                          cbet_faced=50, fold_to_cbet=40, saw_flop=70, went_to_showdown=10),
-    "roca": dict(hands=150, vpip=20, pfr=5, postflop_aggr=8, postflop_calls=30,
-                 cbet_faced=30, fold_to_cbet=18, saw_flop=40, went_to_showdown=12),
-    "agresivo": dict(hands=150, vpip=50, pfr=38, postflop_aggr=70, postflop_calls=25,
-                     cbet_faced=40, fold_to_cbet=16, saw_flop=80, went_to_showdown=24),
-    "maníaco": dict(hands=150, vpip=90, pfr=65, postflop_aggr=120, postflop_calls=30,
-                    cbet_faced=50, fold_to_cbet=10, saw_flop=120, went_to_showdown=45),
-}
-
-
-def from_style(name: str, style: str) -> OpponentStats:
-    """Perfil sintético a partir de una etiqueta de ``STYLE_PRESETS``."""
-    if style not in STYLE_PRESETS:
-        raise ValueError(f"Estilo desconocido: {style!r}. Opciones: {', '.join(STYLE_PRESETS)}")
-    return OpponentStats(name=name, **STYLE_PRESETS[style])

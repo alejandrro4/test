@@ -4,7 +4,7 @@ __pycache__/
 .venv/
 venv/
 # Datos locales del usuario (calibración, plantillas, estadísticas, logs)
-data/calibration*.json
+data/calibration*
 data/templates/
 data/*.sqlite
 logs/

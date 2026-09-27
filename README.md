@@ -1,70 +1,33 @@
 # Poker Bot (Texas Hold'em No Limit)
 
 Asistente de póker en Python para partidas privadas con amigos, sin dinero.
-Lee la mesa desde la pantalla, calcula la mejor jugada y la muestra en un
-overlay; más adelante podrá además ejecutarla con clics (modo automático).
+**Mira tu mesa en la pantalla, sigue la mano y, cuando es tu turno, te dice al
+instante qué hacer** (acción, cantidad, equity, EV y por qué) en una página
+web que puedes tener en el PC o en el móvil. No hace clics: solo mira y recomienda.
 
 > **Juego limpio:** tus amigos saben que usas el asistente. Aun así, ten en
 > cuenta que algunas plataformas (PokerStars entre ellas) prohíben el software
 > de ayuda en tiempo real incluso en mesas privadas o de fichas gratis, y
 > pueden cerrar la cuenta aunque todos los jugadores estén de acuerdo.
 
-## Estado del proyecto
-
-| # | Módulo | Estado |
-|---|--------|--------|
-| 0 | Estructura, dependencias, `GameState` | ✅ hecho |
-| 3a | Evaluador de manos + rangos + equity Monte Carlo | ✅ hecho y testeado |
-| 1 | Captura (`mss`) + herramienta de calibración | ⏳ siguiente |
-| 2 | Lectura de mesa (cartas por template matching, OCR de cantidades, detección de turno) | pendiente |
-| 3b | Preflop (tablas de rangos por posición, push/fold, equity vs all-in) | ✅ hecho y testeado |
-| 3c | Postflop (EV por acción, textura, tamaños, faroles, bloqueadores, SPR) | ✅ hecho y testeado |
-| 3d | Modelado de rivales: estadísticas, estilo y ajustes explotativos | ✅ hecho (falta guardar en SQLite) |
-| — | Modo rápido: recomendación al instante escribiendo la situación (`cli.py`) | ✅ hecho |
-| — | **Página web**: marcas la mano con clics y te da la jugada al instante (PC o móvil) | ✅ hecho |
-| — | Amigos con su estilo guardados en SQLite + registro de cada recomendación | ✅ hecho |
-| 4 | Modo asistente: overlay PyQt + voz | pendiente |
-| 5 | Modo automático: clics con verificación por OCR | pendiente |
-| 6 | Seguridad: F12 de pánico, FAILSAFE, degradar a asistente, log de manos | pendiente |
-| 7 | Resumen de sesión ("víctima favorita", mejor farol...) | pendiente |
-
-## Estructura de carpetas
-
-Las carpetas marcadas con `*` todavía no existen: se crean al llegar a su módulo.
+## Cómo funciona
 
 ```
-poker_bot/
-├── core/
-│   ├── cards.py          # cartas como strings canónicos ("As", "Td"), parseo
-│   └── game_state.py     # GameState, PlayerState, Street, Action, posiciones
-├── engine/               # cerebro
-│   ├── evaluator.py      # fuerza de mano (eval7, con respaldo treys)
-│   ├── ranges.py         # rangos "TT+, ATs+, KQo:0.5, top:20"
-│   ├── equity.py         # Monte Carlo multiway contra rangos, con límite de tiempo
-│   ├── board.py          # textura del board y proyectos (color, escalera)
-│   ├── history.py        # interpreta las acciones: quién abrió, 3-bet, limpers...
-│   ├── opponents.py      # estadísticas de rivales, estilo y ajustes explotativos
-│   ├── villain_range.py  # rango estimado de cada rival y cómo se estrecha
-│   ├── preflop_charts.py # tablas de apertura / 3-bet / 4-bet / defensa / push
-│   ├── preflop.py        # decisión preflop
-│   ├── postflop.py       # decisión postflop por EV
-│   ├── decision_types.py # Decision y Option (salida del cerebro)
-│   └── decision.py       # punto de entrada: decide(GameState) -> Decision
-├── web/
-│   ├── server.py         # servidor local (solo librería estándar) + API /api/decide
-│   └── static/index.html # la página: cartas, posición, apuestas, amigos, voz
-├── stats/
-│   └── store.py          # SQLite: amigos y registro de decisiones
-├── quick.py              # crea un GameState a partir de pocos datos
-├── cli.py                # recomendación instantánea por línea de comandos
-├── capture/ *            # mss + calibración (genera data/calibration.json)
-├── vision/ *             # template matching de cartas, OCR, detección de turno
-├── ui/ *                 # overlay y voz
-├── automation/ *         # pyautogui + verificación
-└── main.py *             # bucle principal
-data/ *                   # calibración, plantillas de cartas, base de datos (no se sube a git)
-tests/                    # pytest, un fichero por módulo
+pantalla ──► captura (mss, 8/s) ──► lectura ──► seguimiento de la mano ──► cerebro ──► página web
+             solo la zona          cartas,      quién subió, pagó,        preflop:     jugada + voz
+             de la mesa            números,     se tiró; calle;           tablas;
+                                   turno        tu turno                  postflop: EV
 ```
+
+- **Lectura** (`vision/`): cartas por plantillas (el número) y color (el palo,
+  baraja de 4 colores); cantidades por plantillas de dígitos que se aprenden
+  solas con Tesseract; turno por el color de los botones; dealer y jugadores
+  en la mano comparando con el tapete. Una mesa nueva se lee en unos 40 ms.
+- **Seguimiento** (`vision/tracker.py`): espera a que la imagen esté estable
+  (2 frames iguales) y deduce las acciones de cada rival comparando frames.
+- **Seguridad:** si algo no se lee bien (una carta que aún no conoce, un número
+  dudoso, el botón de dealer), **no recomienda** y te dice qué falla. Nunca
+  trata un número ilegible como 0.
 
 ## Instalación
 
@@ -76,115 +39,98 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 ```
 
-- **Evaluador:** en Linux y Mac se instala `eval7` (C, rápido). En Windows se
-  usa `treys` (Python puro), porque `eval7` no siempre tiene paquete
-  precompilado. Si tienes compilador de C, puedes probar `pip install eval7`.
-  El código elige solo el que esté disponible.
-- **Tesseract** (para el módulo 2): en Windows, el instalador de UB Mannheim;
-  en Mac, `brew install tesseract`.
+**Tesseract** (el OCR). En Windows, usa el instalador de UB Mannheim; si no
+queda en el PATH, pasa su ruta con
+`--tesseract "C:\Program Files\Tesseract-OCR\tesseract.exe"`. En Mac:
+`brew install tesseract`.
 
-## Tests
+**Evaluador de manos:** en Linux y Mac se instala `eval7` (rápido). En Windows
+se usa `treys` (más lento: la decisión tarda en torno a 1 s en vez de 0,3 s).
 
-```bash
-pytest                                  # todo
-pytest tests/test_equity.py -v          # solo equity
-POKER_BOT_EVALUATOR=treys pytest        # forzar el evaluador de respaldo
-```
+### Ajustes recomendados en PokerStars
 
-Los tests de equity comparan con valores de referencia (AA contra una mano
-aleatoria ≈ 85,2 %, AKs contra QQ ≈ 46 %, proyecto de color contra un set
-≈ 25,6 %...), comprueban que se respeta el tiempo máximo y que en el river
-el resultado es exacto.
+- **Baraja de 4 colores** (♠ negro, ♥ rojo, ♦ azul, ♣ verde): el palo se lee
+  por el color, así que es casi imprescindible.
+- **Mostrar cantidades en ciegas grandes**, si tu versión lo permite. Si no,
+  indica el valor de la ciega grande al calibrar (`--bb`).
+- No cambies el tamaño de la ventana de la mesa después de calibrar.
 
-## Uso del motor de equity
+## Paso 1: calibrar (una vez)
 
-```python
-from poker_bot.core.cards import parse_cards
-from poker_bot.engine.equity import calculate_equity
-from poker_bot.engine.ranges import Range
-
-r = calculate_equity(
-    hero=parse_cards("AhKh"),
-    board=parse_cards("Qh Jh 2c"),
-    villain_ranges=[Range.parse("TT+, AQ+"), Range.top_percent(35)],  # un rango por rival
-    iterations=10_000,
-    time_budget_ms=300,
-)
-print(f"{r.equity:.1%} ({r.iterations} sims en {r.elapsed_ms:.0f} ms)")
-```
-
-Rendimiento medido: con `eval7`, 10 000 simulaciones heads-up tardan unos
-50–60 ms y contra 3 rivales unos 120 ms. Con `treys`, unas 10 000 heads-up
-caben en unos 280 ms; si no caben, el cálculo se corta al llegar al límite de
-tiempo y devuelve lo que lleve.
-
-## Página web (la forma recomendada de usarlo)
+Abre la mesa y espera a que sea **tu turno** (así se ven los botones). Después:
 
 ```bash
-python -m poker_bot.web.server          # abre http://127.0.0.1:8000 en el navegador
-python -m poker_bot.web.server --lan    # y además desde el móvil (misma wifi)
+python -m poker_bot.capture.calibrate --seats 6 --in-bb     # la mesa muestra ciegas
+python -m poker_bot.capture.calibrate --seats 6 --bb 20     # la mesa muestra fichas (ciega grande = 20)
 ```
 
-Con `--lan` la consola muestra la dirección para el móvil
-(p. ej. `http://192.168.1.35:8000`). Si Windows pregunta por el firewall,
-permite el acceso en **redes privadas**.
+A los 5 segundos hace una captura y te va pidiendo que marques zonas con el
+ratón (arrastra un rectángulo y pulsa ENTER; con C saltas un paso):
 
-Cómo se usa:
+1. Toda la mesa.
+2. Tus dos cartas, la primera carta del flop y la del river (si aún no han
+   salido, marca dónde aparecen).
+3. El bote (**solo el número**), los botones de acción y un trozo de tapete vacío.
+4. Cada asiento, **empezando por el tuyo y en el sentido de las agujas del
+   reloj**: el número de su stack, dónde aparece su apuesta, dónde se ven sus
+   cartas boca abajo y dónde aparece el botón de dealer cuando le toca.
 
-1. **Cartas:** toca tus 2 cartas en la rejilla y luego el flop, el turn y el
-   river a medida que salen. Para borrar una carta, toca su casilla. También
-   puedes escribirlas: `AsKd Qh7c2d`.
-2. **Preflop:** marca tu posición y lo que pasó antes (nadie subió / alguien
-   subió y a cuánto / all-in).
-3. **Postflop:** el bote (con la apuesta del rival incluida), si el rival
-   apostó y cuánto, si hablas primero o último y qué hizo preflop.
-4. **Rival:** elige contra qué amigo juegas. En "Gestionar amigos" guardas a
-   cada uno con su estilo (calling station, se tira mucho, roca, agresivo,
-   maníaco), y el bot ajusta faroles y apuestas de valor a esa persona.
-5. La jugada sale **sola** arriba en cuanto la situación está completa: acción,
-   cantidad, equity, EV, motivo y el EV de las alternativas.
-6. **Nueva mano** borra las cartas y, con "Rotar posición", te mueve un puesto.
-   **Voz** lee la jugada en voz alta ("Sube a 3 ciegas").
+Se guarda en `data/calibration.json` junto con `data/calibration_preview.png`,
+una imagen con todas las zonas dibujadas para comprobarlas. Si mueves la
+ventana, repite la calibración.
 
-Todas las cantidades van en **ciegas grandes**. Los amigos y el registro de
-recomendaciones se guardan en `data/poker_bot.sqlite`.
-
-## Recomendación al instante desde la terminal
-
-Las cantidades van en ciegas grandes.
+## Paso 2: jugar
 
 ```bash
-# Preflop: abrir, defender, pagar un all-in
+python -m poker_bot.live            # abre http://127.0.0.1:8000
+python -m poker_bot.live --lan      # y desde el móvil, en la misma wifi (la consola da la dirección)
+```
+
+La página muestra arriba la jugada en cuanto es tu turno: por ejemplo,
+**SUBIR a 7.5 (7.5 BB)**, con la equity, el EV, el motivo y el EV de las
+alternativas. Si la mesa muestra fichas, la cantidad sale en fichas, lista
+para escribirla. Debajo, en **"Lo que veo"**, está todo lo que lee (cartas,
+bote, stacks, apuestas y quién sigue en la mano), para que compruebes que
+lee bien. Con **Voz** te lo dice en voz alta ("Sube a 3 ciegas").
+
+**Las primeras manos:** cuando vea por primera vez el número de una carta
+(A, K, Q…), aparece en la página **"Enséñame estos símbolos"**; tocas qué es y
+ya lo reconoce siempre. Hacen falta los 13 números una sola vez. Los dígitos
+de las cantidades los aprende solo con los stacks; si alguno se le resiste,
+también te lo pregunta.
+
+**Probar sin jugar:** guarda capturas de la mesa (pantalla completa o solo la
+mesa) en una carpeta y reprodúcelas:
+
+```bash
+python -m poker_bot.live --replay capturas/ --fps 2
+```
+
+Opciones: `--fps` (capturas por segundo, 8 por defecto), `--ms` (tiempo máximo
+de cálculo, 600 por defecto), `--port`, `--tesseract`, `--calibration`.
+
+## Modo manual (sin leer la pantalla)
+
+Si prefieres marcar tú la mano con clics, abre `http://127.0.0.1:8000/manual`
+con el modo en vivo en marcha, o lanza solo la página manual:
+
+```bash
+python -m poker_bot.web.server
+```
+
+Y desde la terminal:
+
+```bash
 python -m poker_bot.cli pre AsKd --pos CO
-python -m poker_bot.cli pre 7h7c --pos BB --opener BTN --size 2.5
-python -m poker_bot.cli pre AdJc --pos BB --opener BTN --size 40 --allin
-
-# Postflop: el rival pasa / el rival apuesta 4 en un bote de 9.5 (con su apuesta)
-python -m poker_bot.cli post AhTh --board "Kh9h4c" --pot 5.5 --checked
 python -m poker_bot.cli post As5s --board "Qs9s2d" --pot 9.5 --call 4 --oop
 ```
-
-Salida de ejemplo:
-
-```
-SUBIR a 10 (10 BB) · equity 50% · EV +4.6 BB
-Semi-farol con carta alta + proyecto de color al nuts: subida a 10 en board medio,
-dos colores. Se retiran ~50%; si pagan, equity 47%.
-Alternativas: raise 10: +4.58 | raise 12.8: +4.49 | call 4: +1.96 | fold 0: +0.00
-(171 ms)
-```
-
-Otras opciones: `--villains 3`, `--vpre open|call|3bet`, `--stack`, `--vstack`,
-`--players`, `--ms` (tiempo máximo). `--help` para verlas todas.
 
 ## Cómo piensa el bot
 
 **Preflop.** Tablas de apertura según los jugadores que quedan detrás (sirven
 para mesas de 2 a 10), tablas de 3-bet, pago, 4-bet y 5-bet con frecuencias
 mixtas (A5s hace 3-bet la mitad de las veces), push/fold con 12 ciegas o menos,
-y equity contra el rango del rival cuando pagar compromete el stack. Hace menos
-3-bets de farol contra quien paga todo, y roba más si los de detrás se tiran
-mucho.
+y equity contra el rango del rival cuando pagar compromete el stack.
 
 **Postflop.** Se estima el rango de cada rival (según lo que hizo preflop y
 cómo se estrecha con cada apuesta, pago o pase) y se calcula el EV de cada
@@ -192,21 +138,41 @@ opción: pasar, pagar, tirar y 2 o 3 tamaños de apuesta o subida elegidos por
 textura (c-bets pequeñas en boards secos, grandes en mojados, overbets en el
 river) y SPR (all-in cuando lo que queda es poco).
 
-- **Fold equity:** el rival defiende la frecuencia mínima de equilibrio (MDF),
-  corregida por su perfil, con la parte fuerte de su rango. Nunca tira doble
-  pareja o mejor.
+- **Fold equity:** el rival defiende la frecuencia mínima de equilibrio (MDF)
+  con la parte fuerte de su rango. Nunca tira doble pareja o mejor.
 - **Bloqueadores:** el umbral de defensa se calcula sin nuestras cartas; si
   bloqueamos sus manos buenas, se tira más.
-- **Faroles:** contra un rival equilibrado, farolear sin proyecto vale EV ≈ 0,
-  así que solo se hace cuando gana con margen (bloqueadores, rival que se tira
-  mucho). Los proyectos dan semi-faroles de forma natural.
+- **Faroles:** farolear sin proyecto contra un rival equilibrado vale EV ≈ 0,
+  así que solo se hace cuando gana con margen. Los proyectos dan semi-faroles
+  de forma natural.
 - **Mezclas:** si dos opciones tienen casi el mismo EV, se alterna entre ellas
   para no ser predecible.
-- **Rivales:** contra una calling station no hay faroles y hay más apuestas de
-  valor finas y overbets con nuts; contra quien se tira mucho, más faroles.
+- **Rivales:** se asume un jugador típico de partida casera (algo suelto). No
+  se guarda nada de nadie.
 
-Tiempo de decisión: 0,2–0,3 s con `eval7` y unos 1–1,2 s con `treys`.
+## Estructura
 
-## Calibración
+```
+poker_bot/
+├── core/            cartas y GameState (estado de la mano)
+├── engine/          el cerebro: evaluador, rangos, equity Monte Carlo, preflop, postflop
+├── vision/          calibración, cartas, números, lectura de la mesa, seguimiento de la mano
+├── capture/         captura de pantalla (mss) y herramienta de calibración
+├── web/             servidor local y páginas (en vivo y manual)
+├── live.py          bucle del modo en vivo
+├── quick.py, cli.py modo manual
+data/                calibración y plantillas aprendidas (no se sube a git)
+tests/               pytest (incluye una mesa sintética para probar la lectura)
+```
 
-*(Se documentará con el módulo 1.)*
+## Tests
+
+```bash
+python -m pytest                        # todo (los de lectura necesitan Tesseract)
+POKER_BOT_EVALUATOR=treys python -m pytest
+```
+
+`tests/synthetic.py` dibuja una mesa completa con OpenCV (cartas en 4 colores,
+stacks, apuestas, botón de dealer y botones de acción) para probar la lectura
+de punta a punta: las 52 cartas, los números, el dealer, el turno, el
+seguimiento de la mano y la página en vivo.

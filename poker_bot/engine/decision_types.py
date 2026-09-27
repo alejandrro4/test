@@ -40,13 +40,20 @@ class Decision:
     def ev_bb(self) -> float | None:
         return None if self.ev is None else self.ev / self.big_blind
 
-    def headline(self) -> str:
-        """Texto corto para el overlay: ``SUBIR a 7.5 (3 BB)``."""
+    def headline(self, chips_per_bb: float | None = None) -> str:
+        """Texto corto para el overlay: ``SUBIR a 7.5 (3 BB)``.
+
+        ``chips_per_bb``: si las cantidades internas están en ciegas pero la mesa
+        muestra fichas, la cantidad principal se da en fichas (lo que se escribe).
+        """
         label = _LABELS[self.action]
         if self.action in (ActionType.FOLD, ActionType.CHECK):
             return label
-        amount = f"{self.amount:g}"
         bbs = f"{self.amount / self.big_blind:.1f}".rstrip("0").rstrip(".")
+        if chips_per_bb:
+            amount = f"{round(self.amount / self.big_blind * chips_per_bb, 2):g}"
+        else:
+            amount = f"{self.amount:g}"
         prep = " a " if self.action in (ActionType.RAISE, ActionType.BET) else " "
         return f"{label}{prep}{amount} ({bbs} BB)"
 

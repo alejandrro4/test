@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asistente en vivo</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f4f5f2; --panel: #ffffff; --ink: #1c211d; --muted: #6b726c; --line: #d9ddd7;
+    --felt: #1f6b45; --wait: #4a524c; --warn: #8a5a00; --accent: #1f6b45; --chip: #eef1ec;
+    --s: #1c211d; --h: #c62828; --d: #1565c0; --c: #2e7d32; --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111513; --panel: #1a201c; --ink: #e8ece8; --muted: #98a19a; --line: #2c342f;
+      --felt: #174d33; --wait: #2a312d; --warn: #6b4600; --accent: #4cc38a; --chip: #232b26;
+      --s: #e8ece8; --h: #ff6b6b; --d: #64a8ff; --c: #5fd07f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111513; --panel: #1a201c; --ink: #e8ece8; --muted: #98a19a; --line: #2c342f;
+    --felt: #174d33; --wait: #2a312d; --warn: #6b4600; --accent: #4cc38a; --chip: #232b26;
+    --s: #e8ece8; --h: #ff6b6b; --d: #64a8ff; --c: #5fd07f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 620px; margin: 0 auto; padding: 0 16px 40px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       margin: 20px 0 8px; font-weight: 600; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  #result { position: sticky; top: 0; z-index: 5; margin: 0 -16px; padding: 14px 16px 16px;
+            color: #fff; background: var(--wait); min-height: 120px; transition: background .2s;
+            box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+  #result.turn { background: var(--felt); }
+  #result.warn { background: var(--warn); }
+  #headline { font-size: 20px; font-weight: 700; }
+  #result.turn #headline { font-size: 28px; font-weight: 800; }
+  #headline .tag { display: inline-block; padding: 2px 10px; border-radius: 8px; }
+  #headline .tag.fold { background: #3f4641; color: #fff; }
+  #headline .tag.pass { background: #1565c0; color: #fff; }
+  #headline .tag.aggr { background: #ffb300; color: #1c1c1c; }
+  #headline .tag.allin { background: #d32f2f; color: #fff; }
+  #metrics { display: flex; gap: 12px; font-size: 14px; margin-top: 4px; flex-wrap: wrap; opacity: .95; }
+  #reason { font-size: 14px; margin-top: 6px; opacity: .95; }
+  #alts { font-size: 12px; margin-top: 6px; opacity: .8; }
+  .bar { height: 6px; background: rgba(255,255,255,.25); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: #fff; width: 0; transition: width .25s; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .cards { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .cards .sep { width: 8px; }
+  .mini { width: 38px; height: 52px; border-radius: 6px; border: 1px solid var(--line);
+          display: grid; place-items: center; font-weight: 800; font-size: 16px; background: var(--panel); }
+  .mini.empty { border-style: dashed; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .s { color: var(--s); } .h { color: var(--h); } .d { color: var(--d); } .c { color: var(--c); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+  td, th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.out td { color: var(--muted); }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px;
+          background: var(--chip); border: 1px solid var(--line); }
+  .problems { color: var(--warn); font-size: 13px; margin-top: 8px; }
+  .glyph { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .glyph img { width: 60px; height: 84px; image-rendering: pixelated; border: 1px solid var(--line);
+               border-radius: 6px; background: #fff; flex: none; }
+  .keys { display: flex; flex-wrap: wrap; gap: 5px; }
+  .key { min-width: 38px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line);
+         background: var(--chip); font-weight: 700; }
+  .key.muted { font-weight: 400; font-size: 13px; }
+  .actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+  .chip { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  a { color: var(--accent); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="result" aria-live="polite">
+    <div id="headline">Conectando…</div>
+    <div id="metrics"></div>
+    <div class="bar"><div id="eqbar"></div></div>
+    <div id="reason"></div>
+    <div id="alts"></div>
+  </section>
+
+  <section id="teach" class="hidden">
+    <h2>Enséñame estos símbolos</h2>
+    <div class="panel">
+      <div class="hint" style="margin-top:0">Es la primera vez que veo este símbolo (de una carta o de una cantidad).
+        Dime qué es y ya lo reconoceré siempre. Solo pasa las primeras veces.</div>
+      <div id="glyphs"></div>
+    </div>
+  </section>
+
+  <h2>Lo que veo</h2>
+  <div class="panel">
+    <div class="cards" id="seenCards"></div>
+    <div id="seenPot" style="margin-top:8px"></div>
+    <table>
+      <thead><tr><th>Asiento</th><th class="num">Stack</th><th class="num">Apuesta</th><th>Estado</th></tr></thead>
+      <tbody id="seats"></tbody>
+    </table>
+    <div id="problems" class="problems"></div>
+  </div>
+
+  <div class="actions">
+    <button class="chip" id="voice">Voz</button>
+    <button class="chip" id="pause">Pausar</button>
+    <a href="/manual">Modo manual</a>
+  </div>
+  <div class="hint" id="conn"></div>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
+const ACT_CLASS = { fold: "fold", check: "pass", call: "pass", bet: "aggr", raise: "aggr", all_in: "allin" };
+const ACT_ES = { fold: "tirar", check: "pasar", call: "pagar", bet: "apostar", raise: "subir", all_in: "all-in" };
+const RANK_KEYS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"];
+let voice = false, lastSpoken = "", pendingCount = -1, paused = false;
+try { voice = localStorage.getItem("pokerbot-voice") === "1"; } catch (e) { /* sin almacenamiento */ }
+
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const fmt = x => x == null ? "—" : (Number.isInteger(x) ? String(x) : x.toFixed(1));
+
+function miniCard(c, label) {
+  if (!c) return `<div class="mini empty">${label || ""}</div>`;
+  return `<div class="mini ${c[1]}">${c[0] === "T" ? "10" : c[0]}${SYM[c[1]]}</div>`;
+}
+
+function render(snap) {
+  const box = $("result");
+  const d = snap.decision;
+  box.classList.toggle("turn", !!d);
+  box.classList.toggle("warn", !d && (snap.problems || []).length > 0 && snap.seen && snap.seen.my_turn);
+  if (d) {
+    $("headline").innerHTML = `<span class="tag ${ACT_CLASS[d.action]}">${esc(d.headline)}</span>`;
+    const m = [];
+    if (d.equity != null) m.push(`Equity <b>${Math.round(d.equity * 100)}%</b>`);
+    if (d.ev_bb != null) m.push(`EV <b>${d.ev_bb >= 0 ? "+" : ""}${d.ev_bb.toFixed(1)} BB</b>`);
+    m.push(`${d.elapsed_ms} ms`);
+    $("metrics").innerHTML = m.join("<span>·</span>");
+    $("eqbar").style.width = d.equity != null ? `${Math.round(d.equity * 100)}%` : "0";
+    $("reason").textContent = d.reason;
+    const alts = d.alternatives.filter(a => a.ev_bb != null).map(a =>
+      `${ACT_ES[a.action]}${["bet", "raise", "all_in"].includes(a.action) ? " " + fmt(a.amount_bb) : ""}: ${a.ev_bb >= 0 ? "+" : ""}${a.ev_bb.toFixed(1)}`);
+    $("alts").textContent = alts.length > 1 ? "EV (BB) → " + alts.join(" · ") : "";
+    const key = d.headline + "|" + d.reason;
+    if (voice && key !== lastSpoken && "speechSynthesis" in window) {
+      lastSpoken = key;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(d.speech);
+      u.lang = "es-ES"; u.rate = 1.15;
+      speechSynthesis.speak(u);
+    }
+  } else {
+    $("headline").textContent = snap.paused ? "En pausa" : snap.status;
+    $("metrics").innerHTML = ""; $("alts").textContent = ""; $("eqbar").style.width = "0";
+    $("reason").textContent = (snap.problems || []).length ? "Revisa: " + snap.problems.join(", ") : "";
+  }
+
+  const seen = snap.seen;
+  if (seen) {
+    const board = [0, 1, 2, 3, 4].map(i => miniCard(seen.board[i], ["F", "F", "F", "T", "R"][i]));
+    $("seenCards").innerHTML = miniCard(seen.hero[0], "Tú") + miniCard(seen.hero[1], "Tú") +
+      `<div class="sep"></div>` + board.join("");
+    $("seenPot").innerHTML = `Bote: <b>${fmt(seen.pot)} BB</b>${seen.my_turn ? ' · <span class="pill">tu turno</span>' : ""}`;
+    $("seats").innerHTML = seen.seats.map((s, i) => `
+      <tr class="${s.cards ? "" : "out"}">
+        <td>${i === 0 ? "<b>Tú</b>" : "Asiento " + i}${seen.dealer === i ? ' <span class="pill">D</span>' : ""}</td>
+        <td class="num">${fmt(s.stack)}</td><td class="num">${s.bet ? fmt(s.bet) : ""}</td>
+        <td>${s.cards ? "en mano" : (s.stack == null ? "vacío" : "fuera")}</td></tr>`).join("");
+  }
+  $("problems").textContent = (snap.problems || []).join(" · ");
+  paused = !!snap.paused;
+  $("pause").classList.toggle("on", paused);
+  $("pause").textContent = paused ? "Reanudar" : "Pausar";
+  if (snap.pending_glyphs !== pendingCount) { pendingCount = snap.pending_glyphs; loadGlyphs(); }
+}
+
+// ---------------------------------------------------------------- enseñar cartas
+async function loadGlyphs() {
+  let ids = [];
+  try { ids = await (await fetch("/api/glyphs")).json(); } catch (e) { return; }
+  $("teach").classList.toggle("hidden", !ids.length);
+  $("glyphs").innerHTML = "";
+  for (const id of ids.slice(0, 6)) {
+    const kind = id.split("_")[0];
+    const isSuit = kind === "suit";
+    const keys = isSuit ? ["s", "h", "d", "c"] : kind === "digit" ? [..."0123456789"] : RANK_KEYS;
+    const row = document.createElement("div");
+    row.className = "glyph";
+    row.innerHTML = `<img alt="símbolo desconocido" src="/api/glyphs/${encodeURIComponent(id)}.png">
+      <div class="keys">${keys.map(k => `<button class="key" data-k="${k}">${isSuit ? SYM[k] : k}</button>`).join("")}
+      <button class="key muted" data-k="">${kind === "digit" ? "No es un número" : "No es una carta"}</button></div>`;
+    row.querySelectorAll(".key").forEach(b => b.onclick = async () => {
+      const opts = b.dataset.k
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: b.dataset.k }) }
+        : { method: "DELETE" };
+      await fetch("/api/glyphs/" + encodeURIComponent(id), opts);
+      loadGlyphs();
+    });
+    $("glyphs").appendChild(row);
+  }
+}
+
+// ---------------------------------------------------------------- controles
+function syncVoice() { $("voice").classList.toggle("on", voice); }
+$("voice").onclick = () => {
+  voice = !voice; lastSpoken = "";
+  try { localStorage.setItem("pokerbot-voice", voice ? "1" : "0"); } catch (e) { /* ignorar */ }
+  if (voice && "speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("Voz activada"));
+  syncVoice();
+};
+$("pause").onclick = () => fetch("/api/live/pause", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({ paused: !paused }) });
+syncVoice();
+
+// ---------------------------------------------------------------- tiempo real
+function connect() {
+  const es = new EventSource("/api/live/stream");
+  es.onopen = () => { $("conn").textContent = "Conectado: la página se actualiza sola."; };
+  es.onmessage = ev => render(JSON.parse(ev.data));
+  es.onerror = () => { $("conn").textContent = "Sin conexión con el asistente, reintentando…"; };
+}
+connect();
+</script>
+</body>
+</html>

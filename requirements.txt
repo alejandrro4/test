@@ -1,16 +1,9 @@
-# --- Núcleo (motor de decisión) ---
+# --- Motor de decisión ---
 eval7>=0.1.10 ; platform_system != "Windows"   # evaluador rápido en C (Linux/Mac)
 treys>=0.1.8                                   # evaluador puro Python (respaldo, siempre instala)
 numpy>=1.26
 
-# --- Captura y visión (módulos 1 y 2) ---
-mss>=9.0
-opencv-python>=4.9
-pytesseract>=0.3.10        # requiere el binario de Tesseract instalado aparte
-# easyocr>=1.7             # alternativa a Tesseract (pesada: arrastra PyTorch)
-
-# --- Overlay, voz y automatización (módulos 4, 5 y 6) ---
-PyQt6>=6.6                 # overlay semitransparente siempre visible
-pyttsx3>=2.90              # aviso por voz offline
-pyautogui>=0.9.54
-pynput>=1.7.6              # tecla de pánico global (F12)
+# --- Lectura de pantalla (modo en vivo) ---
+mss>=9.0                   # captura de pantalla rápida
+opencv-python>=4.9         # visión (incluye las ventanas de la calibración)
+pytesseract>=0.3.10        # OCR; requiere el programa Tesseract instalado aparte

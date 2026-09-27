@@ -97,8 +97,6 @@
   .btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font-weight: 600; }
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-top: 20px; }
-  .friend { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
-  .friend span { flex: 1; }
   .hidden { display: none !important; }
   @media (max-width: 380px) { .card { font-size: 13px; padding: 7px 0; } .slot { font-size: 17px; } }
 </style>
@@ -182,22 +180,6 @@
     </div>
   </section>
 
-  <h2>Rival</h2>
-  <div class="panel">
-    <div class="field"><label>¿Contra quién juego? (usa su estilo)</label>
-      <select id="rival"><option value="">Desconocido</option></select></div>
-    <details id="friendsBox">
-      <summary>Gestionar amigos</summary>
-      <div id="friends" style="margin-top:8px"></div>
-      <div class="row">
-        <input id="fname" placeholder="Nombre">
-        <select id="fstyle"></select>
-        <button class="btn" id="fadd" style="flex:0">Añadir</button>
-      </div>
-      <div class="hint">"Calling station": paga todo, no le farolees. "Se tira mucho": farolea más.</div>
-    </details>
-  </div>
-
   <div class="actions">
     <button class="btn primary" id="newHand">Nueva mano</button>
     <button class="chip" id="rotate">Rotar posición</button>
@@ -223,9 +205,9 @@ const S = {
   slots: Array(7).fill(null), active: 0,
   players: 6, position: "BTN", stack: 100, preSit: "none", opener: null, openSize: 2.5,
   betKind: "none", pot: 6, toCall: 3, inPos: true, vpre: "call", villains: 1, vstack: "",
-  rival: "", voice: false, rotate: true,
+  voice: false, rotate: true,
 };
-const PERSIST = ["players", "position", "stack", "voice", "rotate", "rival"];
+const PERSIST = ["players", "position", "stack", "voice", "rotate"];
 try {
   const saved = JSON.parse(localStorage.getItem("pokerbot") || "{}");
   for (const k of PERSIST) if (k in saved) S[k] = saved[k];
@@ -336,45 +318,6 @@ function bindNumber(id, key) {
   el.addEventListener("input", () => { S[key] = el.value === "" ? "" : Number(el.value); changed(false); });
 }
 
-// ------------------------------------------------------------------ amigos
-let STYLES = [];
-async function loadFriends() {
-  try {
-    const [styles, friends] = await Promise.all([
-      fetch("/api/styles").then(r => r.json()), fetch("/api/friends").then(r => r.json())]);
-    STYLES = styles;
-    renderFriends(friends);
-  } catch (e) { /* servidor no disponible: se ve en el resultado */ }
-}
-function renderFriends(friends) {
-  $("fstyle").innerHTML = STYLES.map(s => `<option>${s}</option>`).join("");
-  $("rival").innerHTML = `<option value="">Desconocido</option>` +
-    friends.map(f => `<option value="${escapeHtml(f.name)}">${escapeHtml(f.name)} · ${f.style}</option>`).join("");
-  if (!friends.some(f => f.name === S.rival)) S.rival = "";
-  $("rival").value = S.rival;
-  $("friends").innerHTML = friends.length ? "" : `<div class="hint">Aún no hay amigos guardados.</div>`;
-  for (const f of friends) {
-    const row = document.createElement("div");
-    row.className = "friend";
-    row.innerHTML = `<span>${escapeHtml(f.name)}</span>`;
-    const sel = document.createElement("select");
-    sel.innerHTML = STYLES.map(s => `<option${s === f.style ? " selected" : ""}>${s}</option>`).join("");
-    sel.onchange = () => saveFriend(f.name, sel.value);
-    const del = document.createElement("button");
-    del.className = "btn"; del.textContent = "Borrar";
-    del.onclick = async () => renderFriends(await (await fetch("/api/friends/" + encodeURIComponent(f.name), { method: "DELETE" })).json());
-    row.append(sel, del);
-    $("friends").appendChild(row);
-  }
-}
-async function saveFriend(name, style) {
-  const r = await fetch("/api/friends", { method: "POST", headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({ name, style }) });
-  const data = await r.json();
-  if (r.ok) renderFriends(data); else alert(data.error);
-}
-$("fadd").onclick = () => { const n = $("fname").value.trim(); if (n) { saveFriend(n, $("fstyle").value); $("fname").value = ""; } };
-$("rival").onchange = e => { S.rival = e.target.value; changed(); };
 function escapeHtml(s) { return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
 
 // ------------------------------------------------------------------ petición
@@ -389,7 +332,7 @@ function buildRequest() {
   if (!hero.every(Boolean)) return { wait: "Elige tus 2 cartas" };
   const board = boardCards();
   if (!board.ok) return { wait: "El board necesita 3, 4 o 5 cartas seguidas" };
-  const req = { hero, board: board.cards, rivals: S.rival ? [S.rival] : [] };
+  const req = { hero, board: board.cards };
   if (!board.cards.length) {
     req.preflop = { players: S.players, position: S.position, stack: S.stack || 100 };
     if (S.preSit !== "none") {
@@ -526,7 +469,6 @@ bindNumber("toCall", "toCall");
 bindNumber("vstack", "vstack");
 $("stackPost").addEventListener("input", e => { S.stack = e.target.value === "" ? "" : Number(e.target.value); changed(false); });
 render();
-loadFriends();
 </script>
 </body>
 </html>
