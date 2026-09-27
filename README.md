@@ -21,6 +21,8 @@ overlay; más adelante podrá además ejecutarla con clics (modo automático).
 | 3c | Postflop (EV por acción, textura, tamaños, faroles, bloqueadores, SPR) | ✅ hecho y testeado |
 | 3d | Modelado de rivales: estadísticas, estilo y ajustes explotativos | ✅ hecho (falta guardar en SQLite) |
 | — | Modo rápido: recomendación al instante escribiendo la situación (`cli.py`) | ✅ hecho |
+| — | **Página web**: marcas la mano con clics y te da la jugada al instante (PC o móvil) | ✅ hecho |
+| — | Amigos con su estilo guardados en SQLite + registro de cada recomendación | ✅ hecho |
 | 4 | Modo asistente: overlay PyQt + voz | pendiente |
 | 5 | Modo automático: clics con verificación por OCR | pendiente |
 | 6 | Seguridad: F12 de pánico, FAILSAFE, degradar a asistente, log de manos | pendiente |
@@ -48,13 +50,17 @@ poker_bot/
 │   ├── postflop.py       # decisión postflop por EV
 │   ├── decision_types.py # Decision y Option (salida del cerebro)
 │   └── decision.py       # punto de entrada: decide(GameState) -> Decision
+├── web/
+│   ├── server.py         # servidor local (solo librería estándar) + API /api/decide
+│   └── static/index.html # la página: cartas, posición, apuestas, amigos, voz
+├── stats/
+│   └── store.py          # SQLite: amigos y registro de decisiones
 ├── quick.py              # crea un GameState a partir de pocos datos
 ├── cli.py                # recomendación instantánea por línea de comandos
 ├── capture/ *            # mss + calibración (genera data/calibration.json)
 ├── vision/ *             # template matching de cartas, OCR, detección de turno
 ├── ui/ *                 # overlay y voz
 ├── automation/ *         # pyautogui + verificación
-├── stats/ *              # SQLite, log de manos, resumen de sesión
 └── main.py *             # bucle principal
 data/ *                   # calibración, plantillas de cartas, base de datos (no se sube a git)
 tests/                    # pytest, un fichero por módulo
@@ -112,7 +118,38 @@ Rendimiento medido: con `eval7`, 10 000 simulaciones heads-up tardan unos
 caben en unos 280 ms; si no caben, el cálculo se corta al llegar al límite de
 tiempo y devuelve lo que lleve.
 
-## Recomendación al instante (modo rápido)
+## Página web (la forma recomendada de usarlo)
+
+```bash
+python -m poker_bot.web.server          # abre http://127.0.0.1:8000 en el navegador
+python -m poker_bot.web.server --lan    # y además desde el móvil (misma wifi)
+```
+
+Con `--lan` la consola muestra la dirección para el móvil
+(p. ej. `http://192.168.1.35:8000`). Si Windows pregunta por el firewall,
+permite el acceso en **redes privadas**.
+
+Cómo se usa:
+
+1. **Cartas:** toca tus 2 cartas en la rejilla y luego el flop, el turn y el
+   river a medida que salen. Para borrar una carta, toca su casilla. También
+   puedes escribirlas: `AsKd Qh7c2d`.
+2. **Preflop:** marca tu posición y lo que pasó antes (nadie subió / alguien
+   subió y a cuánto / all-in).
+3. **Postflop:** el bote (con la apuesta del rival incluida), si el rival
+   apostó y cuánto, si hablas primero o último y qué hizo preflop.
+4. **Rival:** elige contra qué amigo juegas. En "Gestionar amigos" guardas a
+   cada uno con su estilo (calling station, se tira mucho, roca, agresivo,
+   maníaco), y el bot ajusta faroles y apuestas de valor a esa persona.
+5. La jugada sale **sola** arriba en cuanto la situación está completa: acción,
+   cantidad, equity, EV, motivo y el EV de las alternativas.
+6. **Nueva mano** borra las cartas y, con "Rotar posición", te mueve un puesto.
+   **Voz** lee la jugada en voz alta ("Sube a 3 ciegas").
+
+Todas las cantidades van en **ciegas grandes**. Los amigos y el registro de
+recomendaciones se guardan en `data/poker_bot.sqlite`.
+
+## Recomendación al instante desde la terminal
 
 Las cantidades van en ciegas grandes.
 

@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asistente de Póker</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f4f5f2; --panel: #ffffff; --ink: #1c211d; --muted: #6b726c; --line: #d9ddd7;
+    --felt: #1f6b45; --felt-ink: #ffffff; --accent: #1f6b45; --chip: #eef1ec;
+    --s: #1c211d; --h: #c62828; --d: #1565c0; --c: #2e7d32;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111513; --panel: #1a201c; --ink: #e8ece8; --muted: #98a19a; --line: #2c342f;
+      --felt: #174d33; --felt-ink: #ffffff; --accent: #4cc38a; --chip: #232b26;
+      --s: #e8ece8; --h: #ff6b6b; --d: #64a8ff; --c: #5fd07f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111513; --panel: #1a201c; --ink: #e8ece8; --muted: #98a19a; --line: #2c342f;
+    --felt: #174d33; --felt-ink: #ffffff; --accent: #4cc38a; --chip: #232b26;
+    --s: #e8ece8; --h: #ff6b6b; --d: #64a8ff; --c: #5fd07f;
+  }
+  /* Etiqueta de la jugada: mismos colores en ambos temas (van sobre el tapete verde) */
+  #headline .tag.fold { background: #3f4641; color: #fff; }
+  #headline .tag.pass { background: #1565c0; color: #fff; }
+  #headline .tag.aggr { background: #ffb300; color: #1c1c1c; }
+  #headline .tag.allin { background: #d32f2f; color: #fff; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 620px; margin: 0 auto; padding: 0 16px 48px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       margin: 20px 0 8px; font-weight: 600; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, select { font: inherit; color: var(--ink); background: var(--panel);
+                  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  input[type=number] { width: 100%; }
+
+  /* ---- Resultado ---- */
+  #result {
+    position: sticky; top: 0; z-index: 5; margin: 0 -16px; padding: 12px 16px 14px;
+    background: var(--felt); color: var(--felt-ink); box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    min-height: 92px;
+  }
+  #headline { font-size: 24px; font-weight: 800; letter-spacing: .01em; }
+  #headline .tag { display: inline-block; padding: 2px 10px; border-radius: 8px; background: rgba(0,0,0,.25); }
+  #metrics { display: flex; gap: 14px; font-size: 14px; opacity: .95; margin-top: 2px; flex-wrap: wrap; }
+  #reason { font-size: 14px; margin-top: 6px; opacity: .95; }
+  #alts { font-size: 12px; margin-top: 6px; opacity: .8; }
+  #result.loading #headline { opacity: .6; }
+  #result.error #headline { font-size: 17px; font-weight: 600; }
+  .bar { height: 6px; background: rgba(255,255,255,.25); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: #fff; width: 0; transition: width .25s; }
+
+  /* ---- Cartas ---- */
+  .slots { display: flex; gap: 6px; align-items: center; }
+  .slots .sep { width: 6px; flex: none; }
+  .slot {
+    flex: 1 1 0; min-width: 0; max-width: 52px; aspect-ratio: 3 / 4; border-radius: 8px; border: 2px dashed var(--line);
+    background: var(--panel); display: grid; place-items: center; font-size: 20px; font-weight: 700;
+  }
+  .slot.filled { border-style: solid; }
+  .slot.active { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .slot small { display: block; font-size: 10px; color: var(--muted); font-weight: 500; }
+  .grid { display: grid; grid-template-columns: 22px repeat(13, 1fr); gap: 4px; align-items: center; }
+  .grid .suit { font-size: 18px; text-align: center; }
+  .card {
+    padding: 8px 0; border-radius: 6px; border: 1px solid var(--line); background: var(--panel);
+    font-weight: 700; font-size: 14px; text-align: center; min-width: 0;
+  }
+  .card:disabled { opacity: .15; cursor: default; }
+  .s { color: var(--s); } .h { color: var(--h); } .d { color: var(--d); } .c { color: var(--c); }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row > * { flex: 1; }
+
+  /* ---- Controles ---- */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip);
+    font-size: 14px;
+  }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .chip:disabled { opacity: .35; }
+  .field { display: grid; gap: 4px; }
+  .field label { font-size: 13px; color: var(--muted); }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 10px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font-weight: 600; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-top: 20px; }
+  .friend { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .friend span { flex: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 380px) { .card { font-size: 13px; padding: 7px 0; } .slot { font-size: 17px; } }
+</style>
+</head>
+<body>
+<main>
+  <section id="result" aria-live="polite">
+    <div id="headline">Elige tus cartas</div>
+    <div id="metrics"></div>
+    <div class="bar"><div id="eqbar"></div></div>
+    <div id="reason">Toca una casilla y luego la carta. La jugada aparece sola.</div>
+    <div id="alts"></div>
+  </section>
+
+  <h2>Cartas</h2>
+  <div class="slots" id="slots"></div>
+  <div class="grid" id="grid" style="margin-top:12px"></div>
+  <div class="row">
+    <input id="typed" placeholder="o escribe: AsKd Qh7c2d" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+
+  <!-- ---------------- PREFLOP ---------------- -->
+  <section id="pre">
+    <h2>Preflop</h2>
+    <div class="panel">
+      <div class="field"><label>Mi posición</label><div class="chips" id="positions"></div></div>
+      <div class="field" style="margin-top:10px"><label>¿Qué ha pasado antes de mí?</label>
+        <div class="chips" id="preSit">
+          <button class="chip" data-v="none">Nadie ha subido</button>
+          <button class="chip" data-v="raise">Alguien subió</button>
+          <button class="chip" data-v="allin">All-in</button>
+        </div>
+      </div>
+      <div id="openerBox" class="hidden">
+        <div class="field" style="margin-top:10px"><label>¿Quién?</label><div class="chips" id="openers"></div></div>
+        <div class="fields">
+          <div class="field"><label id="openSizeLbl">Subió a (ciegas)</label><input type="number" id="openSize" min="1" step="0.5"></div>
+        </div>
+      </div>
+      <div class="fields">
+        <div class="field"><label>Jugadores en la mesa</label>
+          <select id="players"></select></div>
+        <div class="field"><label>Mi stack (ciegas)</label><input type="number" id="stack" min="1" step="1"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------- POSTFLOP ---------------- -->
+  <section id="post" class="hidden">
+    <h2>Postflop</h2>
+    <div class="panel">
+      <div class="field"><label>En esta calle</label>
+        <div class="chips" id="betKind">
+          <button class="chip" data-v="none">Nadie ha apostado</button>
+          <button class="chip" data-v="bet">El rival apostó</button>
+        </div>
+      </div>
+      <div class="fields">
+        <div class="field"><label>Bote (ciegas, con su apuesta)</label><input type="number" id="pot" min="0.5" step="0.5"></div>
+        <div class="field" id="toCallBox"><label>Su apuesta (ciegas)</label><input type="number" id="toCall" min="0.5" step="0.5"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>Posición</label>
+        <div class="chips" id="inPos">
+          <button class="chip" data-v="1">Hablo último (en posición)</button>
+          <button class="chip" data-v="0">Hablo primero</button>
+        </div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>Preflop, el rival…</label>
+        <div class="chips" id="vpre">
+          <button class="chip" data-v="call">pagó mi subida</button>
+          <button class="chip" data-v="open">subió y pagué</button>
+          <button class="chip" data-v="3bet">me hizo 3-bet</button>
+        </div>
+      </div>
+      <div class="fields">
+        <div class="field"><label>Rivales en la mano</label>
+          <select id="villains"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+        <div class="field"><label>Mi stack (ciegas)</label><input type="number" id="stackPost" min="0.5" step="1"></div>
+        <div class="field"><label>Stack rival (ciegas)</label><input type="number" id="vstack" min="0.5" step="1" placeholder="igual"></div>
+      </div>
+    </div>
+  </section>
+
+  <h2>Rival</h2>
+  <div class="panel">
+    <div class="field"><label>¿Contra quién juego? (usa su estilo)</label>
+      <select id="rival"><option value="">Desconocido</option></select></div>
+    <details id="friendsBox">
+      <summary>Gestionar amigos</summary>
+      <div id="friends" style="margin-top:8px"></div>
+      <div class="row">
+        <input id="fname" placeholder="Nombre">
+        <select id="fstyle"></select>
+        <button class="btn" id="fadd" style="flex:0">Añadir</button>
+      </div>
+      <div class="hint">"Calling station": paga todo, no le farolees. "Se tira mucho": farolea más.</div>
+    </details>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" id="newHand">Nueva mano</button>
+    <button class="chip" id="rotate">Rotar posición</button>
+    <button class="chip" id="voice">Voz</button>
+  </div>
+  <div class="hint">"Nueva mano" borra las cartas y, con "Rotar posición", te mueve un puesto (el botón avanza).</div>
+</main>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------ datos
+const RANKS = "AKQJT98765432";
+const SUITS = [["s", "♠"], ["h", "♥"], ["d", "♦"], ["c", "♣"]];
+const POS = {
+  2: ["BTN", "BB"], 3: ["BTN", "SB", "BB"], 4: ["BTN", "SB", "BB", "CO"],
+  5: ["BTN", "SB", "BB", "UTG", "CO"], 6: ["BTN", "SB", "BB", "UTG", "HJ", "CO"],
+  7: ["BTN", "SB", "BB", "UTG", "MP", "HJ", "CO"], 8: ["BTN", "SB", "BB", "UTG", "UTG1", "MP", "HJ", "CO"],
+  9: ["BTN", "SB", "BB", "UTG", "UTG1", "UTG2", "MP", "HJ", "CO"],
+};
+const SLOT_LABELS = ["Tú", "Tú", "Flop", "Flop", "Flop", "Turn", "River"];
+
+const S = {
+  slots: Array(7).fill(null), active: 0,
+  players: 6, position: "BTN", stack: 100, preSit: "none", opener: null, openSize: 2.5,
+  betKind: "none", pot: 6, toCall: 3, inPos: true, vpre: "call", villains: 1, vstack: "",
+  rival: "", voice: false, rotate: true,
+};
+const PERSIST = ["players", "position", "stack", "voice", "rotate", "rival"];
+try {
+  const saved = JSON.parse(localStorage.getItem("pokerbot") || "{}");
+  for (const k of PERSIST) if (k in saved) S[k] = saved[k];
+} catch (e) { /* sin almacenamiento: valores por defecto */ }
+function persist() {
+  try { localStorage.setItem("pokerbot", JSON.stringify(Object.fromEntries(PERSIST.map(k => [k, S[k]])))); }
+  catch (e) { /* ignorar */ }
+}
+
+const $ = id => document.getElementById(id);
+const suitOf = c => SUITS.find(s => s[0] === c[1]);
+
+// ------------------------------------------------------------------ cartas
+function renderSlots() {
+  const el = $("slots");
+  el.innerHTML = "";
+  S.slots.forEach((c, i) => {
+    if (i === 2) { const sep = document.createElement("div"); sep.className = "sep"; el.appendChild(sep); }
+    const b = document.createElement("button");
+    b.className = "slot" + (c ? " filled" : "") + (S.active === i ? " active" : "");
+    if (c) {
+      const [, sym] = suitOf(c);
+      b.innerHTML = `<span class="${c[1]}">${c[0] === "T" ? "10" : c[0]}${sym}</span>`;
+    } else {
+      b.innerHTML = `<small>${SLOT_LABELS[i]}</small>`;
+    }
+    b.onclick = () => { if (S.slots[i]) S.slots[i] = null; S.active = i; changed(); };
+    el.appendChild(b);
+  });
+}
+
+function renderGrid() {
+  const used = new Set(S.slots.filter(Boolean));
+  const el = $("grid");
+  if (!el.childElementCount) {
+    for (const [s, sym] of SUITS) {
+      const label = document.createElement("div");
+      label.className = "suit " + s; label.textContent = sym;
+      el.appendChild(label);
+      for (const r of RANKS) {
+      const b = document.createElement("button");
+      b.className = "card " + s; b.dataset.card = r + s;
+      b.setAttribute("aria-label", r + sym);
+      b.textContent = r === "T" ? "10" : r;
+      b.onclick = () => pick(r + s);
+      el.appendChild(b);
+      }
+    }
+  }
+  for (const b of el.querySelectorAll(".card")) b.disabled = used.has(b.dataset.card) || S.active === null;
+}
+
+function nextEmpty(from) {
+  for (let i = from; i < 7; i++) if (!S.slots[i]) return i;
+  for (let i = 0; i < from; i++) if (!S.slots[i]) return i;
+  return null;
+}
+function pick(card) {
+  if (S.active === null) return;
+  S.slots[S.active] = card;
+  S.active = nextEmpty(S.active + 1);
+  changed();
+}
+
+$("typed").addEventListener("input", e => {
+  const txt = e.target.value.replace(/10/g, "T").replace(/[^2-9TJQKAtjqka shdc]/gi, "");
+  const cards = (txt.replace(/\s+/g, "").match(/[2-9TJQKA][shdc]/gi) || [])
+    .map(c => c[0].toUpperCase() + c[1].toLowerCase());
+  if (!cards.length) return;
+  const uniq = [...new Set(cards)].slice(0, 7);
+  S.slots = Array(7).fill(null);
+  uniq.forEach((c, i) => S.slots[i] = c);
+  S.active = nextEmpty(0);
+  changed();
+});
+
+// ------------------------------------------------------------------ controles
+function chipGroup(id, key, parse = v => v) {
+  const el = $(id);
+  el.querySelectorAll(".chip").forEach(b => b.onclick = () => { S[key] = parse(b.dataset.v); changed(); });
+}
+function markChips(id, value) {
+  $(id).querySelectorAll(".chip").forEach(b => b.classList.toggle("on", String(b.dataset.v) === String(value)));
+}
+function preflopOrder(n) {
+  const names = POS[n];
+  return n <= 2 ? names : names.slice(3).concat(names.slice(0, 3));
+}
+function renderPositions() {
+  const names = POS[S.players];
+  if (!names.includes(S.position)) S.position = names[0];
+  const order = preflopOrder(S.players);
+  $("positions").innerHTML = order.map(p =>
+    `<button class="chip${p === S.position ? " on" : ""}" data-v="${p}">${p}</button>`).join("");
+  chipGroup("positions", "position");
+  // Solo puede haber subido alguien que habla antes que yo
+  const before = order.slice(0, order.indexOf(S.position));
+  if (!before.includes(S.opener)) S.opener = before[before.length - 1] || null;
+  $("openers").innerHTML = before.length
+    ? before.map(p => `<button class="chip${p === S.opener ? " on" : ""}" data-v="${p}">${p}</button>`).join("")
+    : `<span class="hint">Nadie habla antes que tú en ${S.position}.</span>`;
+  chipGroup("openers", "opener");
+}
+
+function bindNumber(id, key) {
+  const el = $(id);
+  el.value = S[key];
+  el.addEventListener("input", () => { S[key] = el.value === "" ? "" : Number(el.value); changed(false); });
+}
+
+// ------------------------------------------------------------------ amigos
+let STYLES = [];
+async function loadFriends() {
+  try {
+    const [styles, friends] = await Promise.all([
+      fetch("/api/styles").then(r => r.json()), fetch("/api/friends").then(r => r.json())]);
+    STYLES = styles;
+    renderFriends(friends);
+  } catch (e) { /* servidor no disponible: se ve en el resultado */ }
+}
+function renderFriends(friends) {
+  $("fstyle").innerHTML = STYLES.map(s => `<option>${s}</option>`).join("");
+  $("rival").innerHTML = `<option value="">Desconocido</option>` +
+    friends.map(f => `<option value="${escapeHtml(f.name)}">${escapeHtml(f.name)} · ${f.style}</option>`).join("");
+  if (!friends.some(f => f.name === S.rival)) S.rival = "";
+  $("rival").value = S.rival;
+  $("friends").innerHTML = friends.length ? "" : `<div class="hint">Aún no hay amigos guardados.</div>`;
+  for (const f of friends) {
+    const row = document.createElement("div");
+    row.className = "friend";
+    row.innerHTML = `<span>${escapeHtml(f.name)}</span>`;
+    const sel = document.createElement("select");
+    sel.innerHTML = STYLES.map(s => `<option${s === f.style ? " selected" : ""}>${s}</option>`).join("");
+    sel.onchange = () => saveFriend(f.name, sel.value);
+    const del = document.createElement("button");
+    del.className = "btn"; del.textContent = "Borrar";
+    del.onclick = async () => renderFriends(await (await fetch("/api/friends/" + encodeURIComponent(f.name), { method: "DELETE" })).json());
+    row.append(sel, del);
+    $("friends").appendChild(row);
+  }
+}
+async function saveFriend(name, style) {
+  const r = await fetch("/api/friends", { method: "POST", headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ name, style }) });
+  const data = await r.json();
+  if (r.ok) renderFriends(data); else alert(data.error);
+}
+$("fadd").onclick = () => { const n = $("fname").value.trim(); if (n) { saveFriend(n, $("fstyle").value); $("fname").value = ""; } };
+$("rival").onchange = e => { S.rival = e.target.value; changed(); };
+function escapeHtml(s) { return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+
+// ------------------------------------------------------------------ petición
+function boardCards() {
+  const b = S.slots.slice(2);
+  const n = b.filter(Boolean).length;
+  const contiguous = b.slice(0, n).every(Boolean);
+  return { cards: b.filter(Boolean), ok: contiguous && [0, 3, 4, 5].includes(n) };
+}
+function buildRequest() {
+  const hero = S.slots.slice(0, 2);
+  if (!hero.every(Boolean)) return { wait: "Elige tus 2 cartas" };
+  const board = boardCards();
+  if (!board.ok) return { wait: "El board necesita 3, 4 o 5 cartas seguidas" };
+  const req = { hero, board: board.cards, rivals: S.rival ? [S.rival] : [] };
+  if (!board.cards.length) {
+    req.preflop = { players: S.players, position: S.position, stack: S.stack || 100 };
+    if (S.preSit !== "none") {
+      if (!S.opener) return { wait: "Nadie habla antes que tú: elige \"Nadie ha subido\"" };
+      req.preflop.opener = S.opener;
+      req.preflop.open_size = S.openSize || 2.5;
+      req.preflop.all_in = S.preSit === "allin";
+    }
+  } else {
+    if (!(S.pot > 0)) return { wait: "Indica el bote" };
+    const toCall = S.betKind === "bet" ? Number(S.toCall) || 0 : 0;
+    if (S.betKind === "bet" && !(toCall > 0)) return { wait: "Indica su apuesta" };
+    req.postflop = {
+      pot: S.pot, to_call: toCall, stack: S.stack || 100, in_position: S.inPos,
+      villain_preflop: S.vpre, villains: S.villains,
+      villain_checked: S.betKind === "none" && S.inPos,
+    };
+    if (S.vstack !== "" && S.vstack > 0) req.postflop.villain_stack = S.vstack;
+  }
+  return { req };
+}
+
+let seq = 0, timer = null, lastSpoken = "";
+function schedule() {
+  clearTimeout(timer);
+  timer = setTimeout(ask, 180);
+}
+async function ask() {
+  const { req, wait } = buildRequest();
+  const box = $("result");
+  if (wait) { showMessage(wait); return; }
+  const my = ++seq;
+  box.classList.add("loading");
+  try {
+    const r = await fetch("/api/decide", { method: "POST", headers: { "Content-Type": "application/json" },
+                                           body: JSON.stringify(req) });
+    const data = await r.json();
+    if (my !== seq) return;              // llegó tarde: ya hay una petición más nueva
+    if (!r.ok) { showMessage(data.error || "Error"); return; }
+    showDecision(data);
+  } catch (e) {
+    if (my === seq) showMessage("No hay conexión con el servidor. ¿Está en marcha?");
+  } finally {
+    if (my === seq) box.classList.remove("loading");
+  }
+}
+const ACT_CLASS = { fold: "fold", check: "pass", call: "pass", bet: "aggr", raise: "aggr", all_in: "allin" };
+const ACT_ES = { fold: "tirar", check: "pasar", call: "pagar", bet: "apostar", raise: "subir", all_in: "all-in" };
+function showDecision(d) {
+  const box = $("result");
+  box.classList.remove("error");
+  $("headline").innerHTML = `<span class="tag ${ACT_CLASS[d.action]}">${escapeHtml(d.headline)}</span>`;
+  const m = [];
+  if (d.equity != null) m.push(`Equity <b>${Math.round(d.equity * 100)}%</b>`);
+  if (d.ev_bb != null) m.push(`EV <b>${d.ev_bb >= 0 ? "+" : ""}${d.ev_bb.toFixed(1)} BB</b>`);
+  m.push(`${d.elapsed_ms} ms`);
+  $("metrics").innerHTML = m.join("<span>·</span>");
+  $("eqbar").style.width = d.equity != null ? `${Math.round(d.equity * 100)}%` : "0";
+  $("reason").textContent = d.reason;
+  const alts = d.alternatives.filter(a => a.ev_bb != null)
+    .map(a => `${ACT_ES[a.action]}${["bet", "raise", "all_in"].includes(a.action) ? " " + fmt(a.amount_bb) : ""}: ${a.ev_bb >= 0 ? "+" : ""}${a.ev_bb.toFixed(1)}`);
+  $("alts").textContent = alts.length > 1 ? "EV (BB) → " + alts.join(" · ") : "";
+  if (S.voice && d.speech !== lastSpoken && "speechSynthesis" in window) {
+    lastSpoken = d.speech;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(d.speech);
+    u.lang = "es-ES"; u.rate = 1.1;
+    speechSynthesis.speak(u);
+  }
+}
+function showMessage(msg) {
+  $("result").classList.add("error");
+  $("headline").textContent = msg;
+  $("metrics").innerHTML = ""; $("reason").textContent = ""; $("alts").textContent = "";
+  $("eqbar").style.width = "0";
+}
+const fmt = x => Number.isInteger(x) ? String(x) : x.toFixed(1);
+
+// ------------------------------------------------------------------ nueva mano
+$("newHand").onclick = () => {
+  S.slots = Array(7).fill(null); S.active = 0; lastSpoken = "";
+  S.preSit = "none"; S.betKind = "none";
+  if (S.rotate) {
+    // El botón pasa al jugador de mi izquierda: yo quedo una posición antes (BTN → CO …)
+    const names = POS[S.players];
+    const i = names.indexOf(S.position);
+    S.position = names[(i - 1 + names.length) % names.length];
+  }
+  $("typed").value = "";
+  changed();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+$("rotate").onclick = () => { S.rotate = !S.rotate; changed(false); };
+$("voice").onclick = () => { S.voice = !S.voice; lastSpoken = ""; changed(false); };
+
+// ------------------------------------------------------------------ render general
+function render() {
+  renderSlots(); renderGrid(); renderPositions();
+  const pre = !boardCards().cards.length;
+  $("pre").classList.toggle("hidden", !pre);
+  $("post").classList.toggle("hidden", pre);
+  markChips("preSit", S.preSit);
+  $("openerBox").classList.toggle("hidden", S.preSit === "none");
+  $("openSizeLbl").textContent = S.preSit === "allin" ? "All-in de (ciegas)" : "Subió a (ciegas)";
+  markChips("betKind", S.betKind);
+  $("toCallBox").classList.toggle("hidden", S.betKind !== "bet");
+  markChips("inPos", S.inPos ? 1 : 0);
+  markChips("vpre", S.vpre);
+  $("players").value = S.players;
+  $("villains").value = S.villains;
+  $("rotate").classList.toggle("on", S.rotate);
+  $("voice").classList.toggle("on", S.voice);
+  if (document.activeElement !== $("stack")) $("stack").value = S.stack;
+  if (document.activeElement !== $("stackPost")) $("stackPost").value = S.stack;
+}
+function changed(rerender = true) {
+  if (rerender) render(); else { $("rotate").classList.toggle("on", S.rotate); $("voice").classList.toggle("on", S.voice); }
+  persist();
+  schedule();
+}
+
+// ------------------------------------------------------------------ arranque
+$("players").innerHTML = Object.keys(POS).map(n => `<option>${n}</option>`).join("");
+$("players").onchange = e => { S.players = Number(e.target.value); changed(); };
+$("villains").onchange = e => { S.villains = Number(e.target.value); changed(); };
+chipGroup("preSit", "preSit");
+chipGroup("betKind", "betKind");
+chipGroup("inPos", "inPos", v => v === "1");
+chipGroup("vpre", "vpre");
+bindNumber("stack", "stack");
+bindNumber("openSize", "openSize");
+bindNumber("pot", "pot");
+bindNumber("toCall", "toCall");
+bindNumber("vstack", "vstack");
+$("stackPost").addEventListener("input", e => { S.stack = e.target.value === "" ? "" : Number(e.target.value); changed(false); });
+render();
+loadFriends();
+</script>
+</body>
+</html>
